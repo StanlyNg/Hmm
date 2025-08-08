@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>设备检测工具 · 完整版（注册/登录/PBKDF2/语言/测速/多账号）</title>
+<style>
+:root{
+  --bg:#070708;--card:#0f1112;--muted:#9aa0a6;--accent:#00e6c2;--accent2:#00a3ff;--danger:#ff6b6b;--radius:12px;
+}
+html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+body.windows { --accent:#4cd1ff; --accent2:#1e90ff; }
+body.android { --accent:#00e676; --accent2:#64dd17; }
+body.ios     { --accent:#ffb86b; --accent2:#ff7a59; }
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.03);}
+.logo{display:flex;align-items:center;gap:12px}
+.logo .box{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;color:#041616}
+h1{font-size:16px;margin:0;color:var(--accent)}
+.muted{color:var(--muted)}
+.container{max-width:1100px;margin:22px auto;padding:0 16px;}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;}
+.card{background:linear-gradient(180deg,var(--card), rgba(255,255,255,0.02));padding:14px;border-radius:var(--radius);box-shadow:0 8px 30px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.03);transform:translateY(18px);opacity:0;transition:all .5s ease;}
+.card.visible{transform:none;opacity:1;}
+.col-4{grid-column:span 4;}
+.col-5{grid-column:span 5;}
+.col-3{grid-column:span 3;}
+.col-12{grid-column:span 12;}
+@media(max-width:900px){.col-4,.col-5,.col-3{grid-column:span 12}}
+input,select,textarea{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);padding:10px;border-radius:8px;color:#fff;width:100%;box-sizing:border-box}
+label{font-size:13px;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--accent);color:#031213;padding:8px 12px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent)}
+.btn.danger{background:var(--danger);color:#fff}
+.small{font-size:13px}
+.tiny{font-size:12px;color:var(--muted)}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left;font-size:13px}
+.table th{color:var(--accent)}
+.footer{padding:18px;text-align:center;color:var(--muted)}
+.badge{display:inline-block;padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:999px;font-weight:700}
+.search{display:flex;gap:8px;align-items:center}
+#settingsModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:999}
+.modal-card{width:100%;max-width:720px;background:linear-gradient(180deg,var(--card), rgba(255,255,255,0.02));padding:16px;border-radius:12px}
+.note{font-size:13px;color:var(--muted)}
+/* small helpers */
+.flex-between{display:flex;justify-content:space-between;align-items:center}
+.form-row{display:flex;gap:8px}
+.form-row > *{flex:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="box">DT</div>
+    <div>
+      <h1>设备检测工具 · 完整版</h1>
+      <div class="tiny muted">本地演示 · 支持注册/登录/PBKDF2/多账号/测速</div>
+    </div>
+  </div>
+  <div class="row">
+    <div id="net-status" class="badge tiny">离线</div>
+    <div id="ui-device" class="badge tiny">设备</div>
+  </div>
+</header>
+
+<div class="container">
+  <!-- LOGIN & REGISTER -->
+  <div id="auth-area" class="card col-12" style="display:block;">
+    <div class="flex-between">
+      <div>
+        <div style="font-weight:700;font-size:16px">🔐 登录 / 注册</div>
+        <div class="tiny muted">注册会在本地加密保存用户（PBKDF2 + 随机 salt）。示例后端同步也可选。</div>
+      </div>
+      <div class="tiny muted">默认 admin / 12345678</div>
+    </div>
+    <div style="height:12px"></div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <label>用户名</label>
+        <input id="auth-username" value="admin" />
+      </div>
+      <div style="flex:1;min-width:240px">
+        <label>密码</label>
+        <input id="auth-password" type="password" value="12345678" />
+      </div>
+      <div style="min-width:140px;display:flex;flex-direction:column;gap:8px">
+        <label>操作</label>
+        <div class="row">
+          <button class="btn" onclick="login()">登录</button>
+          <button class="btn secondary" onclick="showRegister()">注册</button>
+          <button class="btn secondary" onclick="showReset()">重置密码</button>
+        </div>
+      </div>
+    </div>
+    <div id="auth-msg" class="note" style="margin-top:10px;color:var(--danger);display:none"></div>
+    <div style="height:12px"></div>
+    <div class="tiny muted">说明：前端加密仅作演示用途。生产环境请使用后端验证与安全存储。</div>
+  </div>
+
+  <!-- REGISTER FORM -->
+  <div id="register-area" class="card col-12" style="display:none;">
+    <div style="font-weight:700">📝 注册新账户</div>
+    <div style="height:8px"></div>
+    <div class="form-row">
+      <div><label>用户名</label><input id="reg-username" /></div>
+      <div><label>密码</label><input id="reg-password" type="password" /></div>
+      <div style="min-width:120px"><label>重复密码</label><input id="reg-password2" type="password" /></div>
+    </div>
+    <div style="height:8px"></div>
+    <div class="row" style="gap:8px">
+      <button class="btn" onclick="register()">注册</button>
+      <button class="btn secondary" onclick="hideRegister()">取消</button>
+    </div>
+    <div id="reg-msg" class="note" style="margin-top:8px;display:none"></div>
+  </div>
+
+  <!-- PASSWORD RESET -->
+  <div id="reset-area" class="card col-12" style="display:none">
+    <div style="font-weight:700">🔧 重置密码（演示）</div>
+    <div style="height:8px"></div>
+    <div class="form-row">
+      <div><label>用户名</label><input id="rst-username" /></div>
+      <div><label>新密码</label><input id="rst-password" type="password" /></div>
+      <div style="min-width:120px"><label>重复</label><input id="rst-password2" type="password" /></div>
+    </div>
+    <div style="height:8px"></div>
+    <div class="row">
+      <button class="btn" onclick="resetPassword()">保存重置</button>
+      <button class="btn secondary" onclick="hideReset()">取消</button>
+    </div>
+    <div id="rst-msg" class="note" style="display:none"></div>
+  </div>
+
+  <!-- APP (hidden until logged in) -->
+  <div id="app" style="display:none">
+    <div class="grid" style="margin-top:10px;">
+      <div class="card col-4" id="card-user">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="muted">当前用户</div>
+            <div style="font-weight:700;font-size:18px" id="cur-user">-</div>
+            <div class="tiny muted" id="cur-role">角色: 普通用户</div>
+          </div>
+          <div style="text-align:right">
+            <div class="tiny muted">界面风格</div>
+            <div class="badge tiny" id="ui-style">默认</div>
+            <div style="height:8px"></div>
+            <div class="row">
+              <button class="btn secondary" onclick="openSettings()">设置</button>
+              <button class="btn danger" onclick="logout()">退出</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card col-5" id="card-time">
+        <div class="muted">⏳ 当前时间</div>
+        <div style="margin-top:10px">
+          <div id="local-time" style="font-weight:700;font-size:18px">--:--:--</div>
+          <div class="tiny muted" id="utc-time">UTC: --:--:--</div>
+          <div class="tiny muted" id="date-day">日期: ----</div>
+        </div>
+      </div>
+
+      <div class="card col-3" id="card-net">
+        <div class="muted">🌐 网络</div>
+        <div id="net-block" style="margin-top:10px">
+          <div id="net-ip" class="small muted">IP: -</div>
+          <div id="net-isp" class="tiny muted">ISP: -</div>
+          <div style="height:8px"></div>
+          <div class="row">
+            <button class="btn" onclick="runPingTest()">Ping</button>
+            <button class="btn secondary" onclick="runSpeedTest()">测速</button>
+          </div>
+          <div id="speed-result" class="tiny muted" style="margin-top:8px">速度: -</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div class="card col-4">
+        <div class="muted">💻 系统信息</div>
+        <table class="table" style="margin-top:8px"><tbody id="sys-table"><tr><th>项目</th><th>值</th></tr></tbody></table>
+      </div>
+
+      <div class="card col-5">
+        <div class="muted">🖥 硬件信息</div>
+        <table class="table" style="margin-top:8px"><tbody id="hw-table"><tr><th>项目</th><th>值</th></tr></tbody></table>
+      </div>
+
+      <div class="card col-3">
+        <div class="muted">🗣 语言系统</div>
+        <div id="lang-default" class="small" style="margin-top:8px"></div>
+        <div id="lang-supported" class="tiny muted" style="margin-top:6px"></div>
+        <div style="height:8px"></div>
+        <div class="muted">全球语言（搜索）</div>
+        <div style="height:6px"></div>
+        <div class="search">
+          <input id="lang-search" placeholder="搜索语言代码/中文/英文" oninput="renderLangTable()" />
+          <button class="btn secondary" onclick="document.getElementById('lang-search').value='';renderLangTable()">清除</button>
+        </div>
+        <div style="height:8px"></div>
+        <div style="max-height:260px;overflow:auto;">
+          <table class="table"><thead><tr><th>代码</th><th>中文</th><th>英文</th></tr></thead><tbody id="lang-table"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin: user management -->
+    <div id="admin-area" style="display:none;margin-top:12px;">
+      <div class="card col-12">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-weight:700">🛠 多账号管理（管理员专用）</div><div class="tiny muted">可新增/删除/修改用户（仅本地存储）</div></div>
+          <div>
+            <div class="row" style="gap:8px">
+              <input id="new-username" placeholder="用户名" style="width:140px" />
+              <input id="new-password" placeholder="密码" type="password" style="width:160px" />
+              <select id="new-role"><option value="user">普通用户</option><option value="admin">管理员</option></select>
+              <button class="btn" onclick="adminAddUser()">新增</button>
+            </div>
+          </div>
+        </div>
+        <div style="height:8px"></div>
+        <div style="max-height:220px;overflow:auto;">
+          <table class="table"><thead><tr><th>用户名</th><th>角色</th><th>操作</th></tr></thead><tbody id="user-table"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+    <div class="footer">
+      &copy; <span id="copyright-year"></span> 设备检测工具 · 演示版 · 请勿将此页面作为唯一的安全措施
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModal">
+  <div class="modal-card">
+    <div class="flex-between">
+      <div style="font-weight:700;color:var(--accent)">设置</div>
+      <div>
+        <button class="btn secondary" onclick="closeSettings()">关闭</button>
+      </div>
+    </div>
+    <div style="height:10px"></div>
+    <div>
+      <div class="note">更改密码（当前登录用户）</div>
+      <div style="height:8px"></div>
+      <div class="form-row"><input id="setpass-old" type="password" placeholder="旧密码" /><input id="setpass-new" type="password" placeholder="新密码" /></div>
+      <div style="height:8px"></div>
+      <div class="row"><button class="btn" onclick="changeMyPassword()">保存</button><button class="btn secondary" onclick="closeSettings()">取消</button></div>
+      <div style="height:12px"></div>
+      <div class="note">可将用户数据同步到后端（示例）</div>
+      <div style="height:8px"></div>
+      <div class="row"><input id="backend-url" placeholder="后端接口 URL (示例: https://example.com/api/usersync)" /><button class="btn" onclick="syncToBackend()">同步</button></div>
+      <div id="sync-msg" class="note" style="margin-top:8px;display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================
+   数据/存储结构说明（localStorage）
+   - dt_users_v2 => { username: {hash:..., salt:..., iterations:..., role:'admin'/'user'} , ... }
+   - dt_login_v2 => { username, ts, remember }
+   ========================== */
+
+const LS_USERS = 'dt_users_v2';
+const LS_LOGIN = 'dt_login_v2';
+
+/* ----------------- PBKDF2 helpers ----------------- */
+async function pbkdf2Hex(password, saltHex, iterations=120000, keylen=32){
+  const enc = new TextEncoder();
+  const passKey = enc.encode(password);
+  const salt = hexToUint8(saltHex);
+  const baseKey = await crypto.subtle.importKey('raw', passKey, {name:'PBKDF2'}, false, ['deriveBits']);
+  const derived = await crypto.subtle.deriveBits({name:'PBKDF2', salt, iterations, hash:'SHA-256'}, baseKey, keylen*8);
+  const arr = Array.from(new Uint8Array(derived));
+  return arr.map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function genSaltHex(len=16){
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function hexToUint8(hex){
+  if(!hex) return new Uint8Array();
+  const res = new Uint8Array(hex.length/2);
+  for(let i=0;i<res.length;i++) res[i]=parseInt(hex.substr(i*2,2),16);
+  return res;
+}
+
+/* ----------------- user store ----------------- */
+function loadUsers(){
+  try{ return JSON.parse(localStorage.getItem(LS_USERS) || '{}'); }catch(e){ return {}; }
+}
+function saveUsers(obj){ localStorage.setItem(LS_USERS, JSON.stringify(obj)); }
+async function ensureDefault(){
+  const users = loadUsers();
+  if(!users['admin']){
+    const salt = genSaltHex();
+    const iter = 120000;
+    const hash = await pbkdf2Hex('12345678', salt, iter);
+    users['admin'] = {hash, salt, iterations: iter, role:'admin'};
+    saveUsers(users);
+    console.log('创建默认用户 admin');
+  }
+}
+
+/* ----------------- UI helpers ----------------- */
+function showEl(id){ document.getElementById(id).style.display = 'block'; }
+function hideEl(id){ document.getElementById(id).style.display = 'none'; }
+function setMsg(id, txt, err=false){ const el=document.getElementById(id); el.style.display='block'; el.style.color = err? 'var(--danger)': 'var(--accent)'; el.textContent = txt; setTimeout(()=>el.style.display='none',4000); }
+
+/* ----------------- Auth actions ----------------- */
+async function register(){
+  const u = (document.getElementById('reg-username').value || '').trim();
+  const p = document.getElementById('reg-password').value || '';
+  const p2 = document.getElementById('reg-password2').value || '';
+  if(!u || !p){ setMsg('reg-msg','请输入用户名和密码', true); return; }
+  if(p !== p2){ setMsg('reg-msg','两次密码不一致', true); return; }
+  const users = loadUsers();
+  if(users[u]){ setMsg('reg-msg','用户已存在', true); return; }
+  const salt = genSaltHex(); const iter = 120000;
+  const hash = await pbkdf2Hex(p, salt, iter);
+  users[u] = {hash, salt, iterations: iter, role:'user'};
+  saveUsers(users);
+  setMsg('reg-msg','注册成功，请登录');
+  document.getElementById('reg-username').value=''; document.getElementById('reg-password').value=''; document.getElementById('reg-password2').value='';
+  hideRegister();
+}
+function showRegister(){ hideEl('auth-area'); showEl('register-area'); }
+function hideRegister(){ showEl('auth-area'); hideEl('register-area'); }
+
+async function login(){
+  const u = (document.getElementById('auth-username').value || '').trim();
+  const p = document.getElementById('auth-password').value || '';
+  if(!u || !p){ setMsg('auth-msg','请输入用户名和密码', true); return; }
+  const users = loadUsers();
+  if(!users[u]){ setMsg('auth-msg','用户名或密码错误', true); return; }
+  const record = users[u];
+  const h = await pbkdf2Hex(p, record.salt, record.iterations);
+  if(h === record.hash){
+    // 登录成功
+    localStorage.setItem(LS_LOGIN, JSON.stringify({username:u,ts:Date.now(), remember: true}));
+    initApp();
+  } else setMsg('auth-msg','用户名或密码错误', true);
+}
+
+function logout(){
+  localStorage.removeItem(LS_LOGIN);
+  location.reload();
+}
+
+/* ----------------- Reset password (simple flow) ----------------- */
+function showReset(){ hideEl('auth-area'); showEl('reset-area'); }
+function hideReset(){ showEl('auth-area'); hideEl('reset-area'); }
+
+async function resetPassword(){
+  const u = (document.getElementById('rst-username').value || '').trim();
+  const p = document.getElementById('rst-password').value || '';
+  const p2 = document.getElementById('rst-password2').value || '';
+  if(!u || !p){ setMsg('rst-msg','请输入用户名和密码', true); return; }
+  if(p !== p2){ setMsg('rst-msg','两次密码不一致', true); return; }
+  const users = loadUsers();
+  if(!users[u]){ setMsg('rst-msg','用户不存在', true); return; }
+  const salt = genSaltHex(); const iter = 120000;
+  const hash = await pbkdf2Hex(p, salt, iter);
+  users[u] = {...users[u], hash, salt, iterations: iter};
+  saveUsers(users);
+  setMsg('rst-msg','密码已重置');
+  hideReset();
+}
+
+/* ----------------- Admin functions ----------------- */
+async function adminAddUser(){
+  const u = (document.getElementById('new-username').value || '').trim();
+  const p = document.getElementById('new-password').value || '';
+  const role = document.getElementById('new-role').value;
+  if(!u || !p){ alert('请输入用户名与密码'); return; }
+  const users = loadUsers();
+  if(users[u]){ alert('用户已存在'); return; }
+  const salt = genSaltHex(); const iter = 120000;
+  const hash = await pbkdf2Hex(p, salt, iter);
+  users[u] = {hash, salt, iterations: iter, role};
+  saveUsers(users);
+  document.getElementById('new-username').value=''; document.getElementById('new-password').value='';
+  renderUserTable();
+}
+function adminDelUser(u){ if(!confirm('删除用户 '+u+' ?')) return; const users=loadUsers(); delete users[u]; saveUsers(users); renderUserTable(); }
+function adminToggleAdmin(u){
+  const users=loadUsers(); if(!users[u]) return;
+  users[u].role = users[u].role === 'admin' ? 'user' : 'admin'; saveUsers(users); renderUserTable();
+}
+function renderUserTable(){
+  const tbody = document.getElementById('user-table'); tbody.innerHTML='';
+  const users = loadUsers();
+  Object.keys(users).forEach(u=>{
+    const tr = document.createElement('tr');
+    const role = users[u].role || 'user';
+    tr.innerHTML = `<td class="small">${u}</td><td class="small">${role}</td>
+      <td class="small">
+        <button class="btn secondary" onclick="adminToggleAdmin('${u}')">${role==='admin'?'降为用户':'设为管理员'}</button>
+        <button class="btn danger" onclick="adminDelUser('${u}')">删除</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ----------------- Device detection & UI apply ----------------- */
+function detectDevice(){
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const lower = ua.toLowerCase();
+  if(/windows phone|windows/i.test(lower)) return 'Windows';
+  if(/android/i.test(lower)) return 'Android';
+  if(/iphone|ipad|ipod|ios/i.test(lower) || (navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform))) return 'iOS';
+  if(/macintosh|mac os x/i.test(lower)) return 'Mac';
+  if(/linux/i.test(lower)) return 'Linux';
+  return 'Other';
+}
+function applyDeviceUI(device){
+  document.getElementById('ui-device').textContent = device;
+  const b = document.body; b.classList.remove('windows','android','ios');
+  if(device==='Windows') b.classList.add('windows');
+  if(device==='Android') b.classList.add('android');
+  if(device==='iOS') b.classList.add('ios');
+  document.getElementById('ui-style').textContent = device;
+}
+
+/* ----------------- System / Hardware populate ----------------- */
+function parseOSVersion(){
+  const ua = navigator.userAgent;
+  let os='Unknown', ver='';
+  if(/Windows NT 10/i.test(ua)) { os='Windows'; ver='10/11'; }
+  else if(/Android\s+([\d_.]+)/i.test(ua)) { os='Android'; ver=(ua.match(/Android\s+([\d_.]+)/i)||[])[1]; }
+  else if(/iPhone OS\s([\d_]+)/i.test(ua)) { os='iOS'; ver=(ua.match(/iPhone OS\s([\d_]+)/i)||[])[1].replace(/_/g,'.'); }
+  else if(/Mac OS X\s([\d_]+)/i.test(ua)){ os='macOS'; ver=(ua.match(/Mac OS X\s([\d_]+)/i)||[])[1].replace(/_/g,'.'); }
+  else if(/Linux/i.test(ua)) { os='Linux'; ver='-'; }
+  return {os,ver};
+}
+function parseBrowser(){
+  const ua = navigator.userAgent;
+  let name='Unknown', ver='-', engine='Unknown';
+  if(/Edg\/([\d.]+)/.test(ua)){ name='Edge'; ver=(ua.match(/Edg\/([\d.]+)/)||[])[1]; engine='Blink'; }
+  else if(/OPR\/([\d.]+)/.test(ua)){ name='Opera'; ver=(ua.match(/OPR\/([\d.]+)/)||[])[1]; engine='Blink'; }
+  else if(/Chrome\/([\d.]+)/.test(ua) && !/Chromium/.test(ua)){ name='Chrome'; ver=(ua.match(/Chrome\/([\d.]+)/)||[])[1]; engine='Blink'; }
+  else if(/Safari\/([\d.]+)/.test(ua) && /Version\/([\d.]+)/.test(ua)){ name='Safari'; ver=(ua.match(/Version\/([\d.]+)/)||[])[1]; engine='WebKit'; }
+  else if(/Firefox\/([\d.]+)/.test(ua)){ name='Firefox'; ver=(ua.match(/Firefox\/([\d.]+)/)||[])[1]; engine='Gecko'; }
+  else if(/Chromium\/([\d.]+)/.test(ua)){ name='Chromium'; ver=(ua.match(/Chromium\/([\d.]+)/)||[])[1]; engine='Blink'; }
+  return {name,ver,engine};
+}
+function populateSystem(){
+  const st = document.getElementById('sys-table'); st.innerHTML = '<tr><th>项目</th><th>值</th></tr>';
+  const p = parseOSVersion(), b = parseBrowser();
+  const rows = [
+    ['操作系统', p.os + (p.ver ? ' ' + p.ver : '')],
+    ['平台 (navigator.platform)', navigator.platform || '-'],
+    ['浏览器', `${b.name} ${b.ver}`],
+    ['渲染内核', b.engine],
+    ['UserAgent', navigator.userAgent],
+    ['语言', navigator.language || '-'],
+    ['支持语言', (navigator.languages||[]).join(', ') || '-'],
+    ['时区', Intl.DateTimeFormat().resolvedOptions().timeZone || '-'],
+  ];
+  rows.forEach(r=>{
+    const tr=document.createElement('tr'); tr.innerHTML = `<td class="tiny muted">${r[0]}</td><td class="small">${r[1]}</td>`; st.appendChild(tr);
+  });
+}
+function populateHardware(){
+  const t = document.getElementById('hw-table'); t.innerHTML='<tr><th>项目</th><th>值</th></tr>';
+  const rows = [
+    ['屏幕分辨率', `${window.screen.width} × ${window.screen.height}`],
+    ['可用屏幕', `${window.screen.availWidth} × ${window.screen.availHeight}`],
+    ['设备像素比 (DPR)', window.devicePixelRatio || '-'],
+    ['CPU 核心数', navigator.hardwareConcurrency || '未知'],
+    ['内存 (GB)', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : '未知'],
+    ['触控支持', ('ontouchstart' in window) ? '是' : '否'],
+    ['网络在线', navigator.onLine ? '在线' : '离线']
+  ];
+  rows.forEach(r=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td class="tiny muted">${r[0]}</td><td class="small">${r[1]}</td>`; t.appendChild(tr); });
+}
+
+/* ----------------- Time ----------------- */
+let timeInterval = null;
+function startClock(){
+  function tick(){
+    const now=new Date();
+    document.getElementById('local-time').textContent = now.toLocaleTimeString();
+    document.getElementById('utc-time').textContent = 'UTC: ' + now.toUTCString().split(' ')[4];
+    document.getElementById('date-day').textContent = '日期: ' + now.toISOString().split('T')[0] + ' · ' + now.toLocaleDateString('zh-CN',{weekday:'long'});
+    document.getElementById('copyright-year').textContent = new Date().getFullYear();
+  }
+  tick(); if(timeInterval) clearInterval(timeInterval); timeInterval=setInterval(tick,1000);
+}
+
+/* ----------------- Language list (大量内置，可扩展) ----------------- */
+/* 为简洁，列表定义为数组（可进一步扩充到 200+） */
+const GLOBAL_LANGS = [
+  ['zh-CN','简体中文','Simplified Chinese'],
+  ['zh-TW','繁體中文','Traditional Chinese'],
+  ['en-US','英语（美国）','English (United States)'],
+  ['en-GB','英语（英国）','English (United Kingdom)'],
+  ['es-ES','西班牙语（西班牙）','Spanish (Spain)'],
+  ['es-MX','西班牙语（墨西哥）','Spanish (Mexico)'],
+  ['pt-BR','葡萄牙语（巴西）','Portuguese (Brazil)'],
+  ['pt-PT','葡萄牙语（葡萄牙）','Portuguese (Portugal)'],
+  ['fr-FR','法语（法国）','French (France)'],
+  ['de-DE','德语（德国）','German (Germany)'],
+  ['it-IT','意大利语','Italian'],
+  ['ja-JP','日语','Japanese'],
+  ['ko-KR','韩语','Korean'],
+  ['ru-RU','俄语','Russian'],
+  ['ar-SA','阿拉伯语','Arabic'],
+  ['hi-IN','印地语','Hindi'],
+  ['bn-BD','孟加拉语','Bengali'],
+  ['pa-IN','旁遮普语','Punjabi'],
+  ['vi-VN','越南语','Vietnamese'],
+  ['id-ID','印尼语','Indonesian'],
+  ['ms-MY','马来语','Malay'],
+  ['th-TH','泰语','Thai'],
+  ['tr-TR','土耳其语','Turkish'],
+  ['nl-NL','荷兰语','Dutch'],
+  ['sv-SE','瑞典语','Swedish'],
+  ['pl-PL','波兰语','Polish'],
+  ['ro-RO','罗马尼亚语','Romanian'],
+  ['el-GR','希腊语','Greek'],
+  ['he-IL','希伯来语','Hebrew'],
+  ['hu-HU','匈牙利语','Hungarian'],
+  ['cs-CZ','捷克语','Czech'],
+  ['sk-SK','斯洛伐克语','Slovak'],
+  ['bg-BG','保加利亚语','Bulgarian'],
+  ['uk-UA','乌克兰语','Ukrainian'],
+  ['sr-RS','塞尔维亚语','Serbian'],
+  ['hr-HR','克罗地亚语','Croatian'],
+  ['lt-LT','立陶宛语','Lithuanian'],
+  ['lv-LV','拉脱维亚语','Latvian'],
+  ['et-EE','爱沙尼亚语','Estonian'],
+  ['sl-SI','斯洛文尼亚语','Slovenian'],
+  ['fa-IR','波斯语','Persian'],
+  ['ur-PK','乌尔都语','Urdu'],
+  ['sw-KE','斯瓦西里语','Swahili'],
+  ['af-ZA','南非荷兰语','Afrikaans'],
+  ['zu-ZA','祖鲁语','Zulu'],
+  ['xh-ZA','科萨语','Xhosa'],
+  ['am-ET','阿姆哈拉语','Amharic'],
+  ['ne-NP','尼泊尔语','Nepali'],
+  ['si-LK','僧伽罗语','Sinhala'],
+  ['mk-MK','马其顿语','Macedonian'],
+  ['sq-AL','阿尔巴尼亚语','Albanian'],
+  ['bn-IN','孟加拉语（印度）','Bengali (India)'],
+  ['mr-IN','马拉地语','Marathi'],
+  ['te-IN','泰卢固语','Telugu'],
+  ['ta-IN','泰米尔语','Tamil'],
+  ['kn-IN','卡纳达语','Kannada'],
+  ['ml-IN','马拉雅拉姆语','Malayalam'],
+  ['gu-IN','古吉拉特语','Gujarati'],
+  ['or-IN','奥里亚语','Odia'],
+  ['as-IN','阿萨姆语','Assamese'],
+  ['ha-NG','豪萨语','Hausa'],
+  ['yo-NG','约鲁巴语','Yoruba'],
+  ['ig-NG','伊博语','Igbo'],
+  ['so-SO','索马里语','Somali'],
+  ['mn-MN','蒙古语','Mongolian'],
+  ['kk-KZ','哈萨克语','Kazakh'],
+  ['uz-UZ','乌兹别克语','Uzbek'],
+  ['az-AZ','阿塞拜疆语','Azerbaijani'],
+  ['hy-AM','亚美尼亚语','Armenian'],
+  ['ka-GE','格鲁吉亚语','Georgian'],
+  ['mn-CN','蒙古语（中文）','Mongolian (China)'],
+  ['bo-CN','藏语','Tibetan'],
+  ['ne-IN','尼泊尔语（印度）','Nepali (India)'],
+  ['tl-PH','他加禄语','Tagalog'],
+  ['ceb-PH','宿务语','Cebuano'],
+  ['ilo-PH','伊洛卡诺语','Ilocano'],
+  ['hmn-CN','苗语','Hmong'],
+  ['my-MM','缅甸语','Burmese'],
+  ['km-KH','高棉语','Khmer'],
+  ['lo-LA','老挝语','Lao'],
+  ['ps-AF','普什图语','Pashto'],
+  ['sd-PK','信德语','Sindhi'],
+  ['gl-ES','加利西亚语','Galician'],
+  ['eu-ES','巴斯克语','Basque'],
+  ['cy-GB','威尔士语','Welsh'],
+  ['ga-IE','爱尔兰语','Irish'],
+  ['lb-LU','卢森堡语','Luxembourgish'],
+  ['mt-MT','马耳他语','Maltese'],
+  ['is-IS','冰岛语','Icelandic'],
+  ['sq-MK','阿尔巴尼亚语（马其顿）','Albanian (Macedonia)']
+];
+// render languages
+function renderLangTable(){
+  const q = (document.getElementById('lang-search').value || '').trim().toLowerCase();
+  const tbody = document.getElementById('lang-table'); tbody.innerHTML='';
+  GLOBAL_LANGS.forEach(it=>{
+    const code=it[0], cn=it[1], en=it[2];
+    const hay = (code+' '+cn+' '+en).toLowerCase();
+    if(q && hay.indexOf(q)===-1) return;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td class="small">${code}</td><td class="small">${cn}</td><td class="small">${en}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ----------------- Network info (ipapi) ----------------- */
+async function fetchIP(){
+  try{
+    const res = await fetch('https://ipapi.co/json/');
+    if(!res.ok) throw new Error('net err');
+    const data = await res.json();
+    document.getElementById('net-ip').textContent = 'IP: ' + (data.ip || '-');
+    document.getElementById('net-isp').textContent = (data.org || '-') + ' · ' + (data.city || '-') + ' · ' + (data.country_name || '-');
+  }catch(e){
+    document.getElementById('net-ip').textContent = 'IP: 无法获取（CORS/本地文件限制）';
+    document.getElementById('net-isp').textContent = '';
+    console.warn('fetchIP failed', e);
+  }
+}
+
+/* ----------------- Ping & Speed Test -----------------
+   - Ping: use fetch to small resource and measure RTT (may be affected by CORS)
+   - Speed: attempt to download a known public file; if CORS blocks, fallback to generated data simulation.
+   Note: In real site,应该使用专门的测速域名与服务器支持 CORS。
+-------------------------------------------------- */
+async function runPingTest(){
+  const t0 = performance.now();
+  const url = 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png'; // small file (may be blocked)
+  try{
+    await fetch(url, {mode:'no-cors'}); // attempt, no-cors avoids CORS error but gives opaque response — timing still possible
+    const t1 = performance.now();
+    setSpeedText(`Ping ~ ${Math.round(t1-t0)} ms (估算)`);
+  }catch(e){
+    // fallback: XHR to same origin (will fail if local file) — show message
+    setSpeedText('Ping 测试失败（CORS 或 本地文件 ）');
+    console.warn('ping fail', e);
+  }
+}
+
+function setSpeedText(txt){ document.getElementById('speed-result').textContent = '测速: ' + txt; }
+
+/* basic download speed test (best-effort, may be blocked) */
+async function runSpeedTest(){
+  setSpeedText('开始下载测试...');
+  // Try to download a moderately sized resource with CORS; if fails, fallback to simulated test
+  const testFiles = [
+    'https://speed.hetzner.de/100MB.bin',
+    'https://speed.hetzner.de/10MB.bin',
+    'https://cdn.cloudflare.steamstatic.com/steam/apps/2568280/header.jpg' // random
+  ];
+  let success=false;
+  for(const url of testFiles){
+    try{
+      const t0 = performance.now();
+      const r = await fetch(url, {mode:'cors'}); // may fail CORS
+      if(!r.ok) throw new Error('non-200');
+      const blob = await r.blob();
+      const t1 = performance.now();
+      const size = blob.size; // bytes
+      const seconds = (t1 - t0)/1000;
+      const mbps = (size*8/seconds)/(1024*1024);
+      setSpeedText(`${mbps.toFixed(2)} Mbps · ${Math.round(size/1024)} KB downloaded in ${seconds.toFixed(2)} s`);
+      success = true; break;
+    }catch(e){
+      console.warn('speed test attempt failed', e);
+    }
+  }
+  if(!success){
+    // fallback simulated test (generate random data and "download" in-memory)
+    const t0 = performance.now();
+    // generate 5 MB blob locally to simulate speed (this measures local generation speed — not real network)
+    const size = 5*1024*1024;
+    const arr = new Uint8Array(size);
+    crypto.getRandomValues(arr);
+    const t1 = performance.now();
+    const seconds = Math.max((t1-t0)/1000, 0.001);
+    setSpeedText(`无法完成真实下载测试，已用本地模拟测量（仅供参考）: 生成 ${Math.round(size/1024)} KB 用时 ${seconds.toFixed(3)} s`);
+  }
+}
+
+/* ----------------- Backend sync example ----------------- */
+async function syncToBackend(){
+  const url = document.getElementById('backend-url').value.trim();
+  if(!url){ setMsg('sync-msg','请输入后端 URL', true); return; }
+  const users = loadUsers();
+  try{
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({users})});
+    if(!res.ok) throw new Error('网络错误');
+    setMsg('sync-msg','已同步到后端');
+  }catch(e){
+    setMsg('sync-msg','同步失败（示例：请改为真实可用接口）', true);
+    console.warn('sync fail', e);
+  }
+}
+
+/* ----------------- Change my password ----------------- */
+async function changeMyPassword(){
+  const oldp = document.getElementById('setpass-old').value || '';
+  const newp = document.getElementById('setpass-new').value || '';
+  if(!oldp || !newp){ alert('请输入旧密码与新密码'); return; }
+  const st = localStorage.getItem(LS_LOGIN); if(!st){ alert('未登录'); return; }
+  const cur = JSON.parse(st).username;
+  const users = loadUsers(); if(!users[cur]) { alert('用户不存在'); return; }
+  const rec = users[cur];
+  const oldHash = await pbkdf2Hex(oldp, rec.salt, rec.iterations);
+  if(oldHash !== rec.hash){ alert('旧密码不正确'); return; }
+  const salt = genSaltHex(), iter=120000; const newHash = await pbkdf2Hex(newp, salt, iter);
+  users[cur] = {...rec, hash:newHash, salt, iterations: iter};
+  saveUsers(users);
+  alert('密码已更新（已保存本地哈希）');
+  document.getElementById('setpass-old').value=''; document.getElementById('setpass-new').value='';
+  closeSettings();
+}
+
+/* ----------------- Settings modal ----------------- */
+function openSettings(){ document.getElementById('settingsModal').style.display='flex'; }
+function closeSettings(){ document.getElementById('settingsModal').style.display='none'; }
+
+/* ----------------- initApp (after login) ----------------- */
+function revealCards(){
+  document.querySelectorAll('.card').forEach((c,i)=>setTimeout(()=>c.classList.add('visible'), i*60));
+}
+async function initApp(){
+  const st = localStorage.getItem(LS_LOGIN);
+  if(!st){ /* show auth area */ document.getElementById('auth-area').style.display='block'; return; }
+  const login = JSON.parse(st);
+  const users = loadUsers();
+  if(!users[login.username]){ // invalid stored login
+    localStorage.removeItem(LS_LOGIN); location.reload(); return;
+  }
+  // hide auth, show app
+  document.getElementById('auth-area').style.display='none';
+  document.getElementById('register-area').style.display='none';
+  document.getElementById('reset-area').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('cur-user').textContent = login.username;
+  document.getElementById('cur-role').textContent = '角色: ' + (users[login.username].role || 'user');
+  if(users[login.username].role === 'admin') document.getElementById('admin-area').style.display='block'; else document.getElementById('admin-area').style.display='none';
+  renderUserTable();
+  applyDeviceUI(detectDevice());
+  populateSystem(); populateHardware(); startClock(); renderLangTable(); fetchIP();
+  revealCards();
+}
+
+/* ----------------- Auto init on load ----------------- */
+(async function(){
+  await ensureDefault();
+  // auto login if previously remembered
+  const st = localStorage.getItem(LS_LOGIN);
+  if(st){
+    try{ const obj = JSON.parse(st); if(obj && obj.remember){ initApp(); return; } }catch(e){}
+  }
+  // else show auth UI
+  renderLangTable();
+  document.getElementById('auth-area').style.display='block';
+  // set online status
+  document.getElementById('net-status').textContent = navigator.onLine ? '在线' : '离线';
+  document.getElementById('ui-device').textContent = detectDevice();
+})();
+
+/* ----------------- small helpers for accessibility ----------------- */
+window.login = login; window.register = register; window.showRegister = showRegister; window.hideRegister = hideRegister;
+window.showReset = showReset; window.hideReset = hideReset; window.resetPassword = resetPassword;
+window.openSettings = openSettings; window.closeSettings = closeSettings; window.changeMyPassword = changeMyPassword;
+window.adminAddUser = adminAddUser; window.adminDelUser = adminDelUser; window.adminToggleAdmin = adminToggleAdmin;
+window.runPingTest = runPingTest; window.runSpeedTest = runSpeedTest; window.syncToBackend = syncToBackend;
+
+/* expose logout */
+window.logout = logout;
+</script>
+</body>
+        </html>
